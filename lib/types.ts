@@ -1,4 +1,5 @@
 import type { SlotSpin } from "./slots";
+import type { RouletteSpin } from "./roulette";
 
 export type CharacterId =
   | "reina"
@@ -13,7 +14,12 @@ export type CharacterId =
   | "iris"
   | "aoi";
 
-export type Tone = "friendly" | "humorous" | "curious" | "flirtatious" | "leave";
+export type Tone =
+  | "friendly"
+  | "humorous"
+  | "curious"
+  | "flirtatious"
+  | "leave";
 export type TimeOfNight = "early" | "prime" | "late" | "after";
 export type ThemeId = "velvet" | "neon" | "gilded" | "moonlit";
 export type OutfitId = "uniform" | "evening";
@@ -74,6 +80,9 @@ export type SaveState = {
   sfx: boolean;
   pendingSlotSpin?: SlotSpin | null;
   lastSlotSpin?: SlotSpin | null;
+  pendingRouletteSpin?: RouletteSpin | null;
+  lastRouletteSpin?: RouletteSpin | null;
+  rouletteHistory?: number[];
 };
 
 export type ChoiceEffects = {
@@ -108,7 +117,14 @@ export type ScriptNode = {
   choices?: ScriptChoice[];
 };
 
-export type ScenePlace = "bar" | "table" | "hotel" | "invite" | "group" | "encore" | "lobby";
+export type ScenePlace =
+  | "bar"
+  | "table"
+  | "hotel"
+  | "invite"
+  | "group"
+  | "encore"
+  | "lobby";
 
 export type Scene = {
   id: string;

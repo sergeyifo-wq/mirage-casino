@@ -30,6 +30,9 @@ export function GameApp() {
 function Shell() {
   const game = useGame();
   useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [game.screen.name]);
+  useEffect(() => {
     if (game.ready) jazz.set(game.state.music);
   }, [game.ready, game.state.music]);
 
@@ -77,7 +80,7 @@ function Shell() {
   }
 
   return (
-    <div data-theme={game.state.theme} className="min-h-screen text-[#f6efe4]">
+    <div data-theme={game.state.theme} className="casino-shell min-h-screen text-[#f6efe4]">
       {screen.name !== "title" && <TopBar />}
       {view}
       <NoticeToast />

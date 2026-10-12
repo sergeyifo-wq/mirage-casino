@@ -23,7 +23,7 @@ export function TitleScreen() {
       style={{ backgroundImage: `url("${assetPath("/art/bg-title.jpg")}")` }}
     >
       <div className="absolute inset-0 bg-gradient-to-r from-[#120812]/90 via-[#120812]/70 to-[#120812]/25" />
-      <div className="relative mx-auto flex min-h-screen max-w-3xl flex-col justify-end px-6 py-16 sm:justify-center">
+      <div className="title-copy relative mx-auto flex min-h-screen flex-col justify-end px-6 sm:justify-center">
         <p className="text-sm tracking-[0.35em] text-[#e4c27a] uppercase">Casino & Hotel</p>
         <h1 className="font-display text-6xl leading-none text-[#f7f1e6] sm:text-8xl">Midnight Mirage</h1>
         <p className="mt-4 max-w-xl text-lg leading-8 text-[#f3e6c8]">

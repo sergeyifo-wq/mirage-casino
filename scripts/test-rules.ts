@@ -13,7 +13,8 @@ import {
   takeInsurance,
 } from "../lib/blackjack";
 import { bestHand, act, aiMove, award, legalActions, stacksTotal, startHand, type Seat } from "../lib/poker";
-import { betWins, settleRoulette, spinWheel } from "../lib/roulette";
+import { WHEEL, addRouletteChip, betWins, isRed, roulettePose, settleRoulette, spinWheel, validRouletteBets, type RouletteSpin } from "../lib/roulette";
+import { splitChips, validWager } from "../lib/chips";
 import { PAYLINES, SYMBOLS, isJackpot, linePayout, scoreGrid, spinReels, type SlotSpin, type SymbolId } from "../lib/slots";
 import { createSave, gameReducer, normalize } from "../lib/store";
 import { dealSequence, handTotal, outcomeOf, pip, settleBaccarat } from "../lib/baccarat";
@@ -391,6 +392,83 @@ function testSlotTransactions() {
   assert.equal(normalize(base).chips, base.chips, "old saves remain compatible");
 }
 
+function testChipBetting() {
+  assert.deepEqual(splitChips(185), [100, 50, 25, 10]);
+  assert.deepEqual(splitChips(70, [10, 50, 100]), [50, 10, 10]);
+  assert.deepEqual(splitChips(-5), []);
+  assert.equal(validWager(0, 10, 200, 10), false);
+  assert.equal(validWager(25, 10, 200, 10), false);
+  assert.equal(validWager(200, 10, 200, 10), true);
+  assert.equal(validWager(210, 10, 200, 10), false);
+  assert.equal(validWager(50, 100, 500, 50), false);
+
+  const target = { kind: "straight" as const, n: 17 };
+  const first = addRouletteChip([], target, 25);
+  const second = addRouletteChip(first.bets, target, 25);
+  assert.equal(second.bets.length, 1);
+  assert.equal(second.bets[0].amount, 50);
+  assert.equal(first.bets[0].amount, 25, "placements are immutable");
+  assert.ok(addRouletteChip(second.bets, target, 5).error);
+  assert.ok(addRouletteChip([], { kind: "straight", n: 37 }, 5).error);
+  assert.ok(addRouletteChip([], { kind: "dozen", n: 0 }, 5).error);
+  assert.ok(addRouletteChip([], { kind: "black", n: 2 }, 5).error);
+  assert.ok(addRouletteChip([], target, 100).error);
+  assert.ok(addRouletteChip([], target, 25, 20).error);
+  let layout = first.bets;
+  for (let i = 0; i < 5; i++) layout = addRouletteChip(layout, { kind: "red" }, 50).bets;
+  layout = addRouletteChip(layout, { kind: "black" }, 25).bets;
+  assert.equal(layout.reduce((sum, bet) => sum + bet.amount, 0), 300);
+  assert.ok(addRouletteChip(layout, { kind: "odd" }, 5).error);
+  assert.equal(validRouletteBets(layout), true);
+  assert.equal(validRouletteBets([]), false);
+  assert.equal(validRouletteBets([{ id: "bad", kind: "straight", n: 17, amount: 55 }]), false);
+  assert.equal(validRouletteBets([first.bets[0], first.bets[0]]), false);
+  assert.equal(validRouletteBets([{ ...first.bets[0], amount: -5 }]), false);
+}
+
+function testRouletteGeometryAndTransactions() {
+  assert.equal(WHEEL.length, 37);
+  assert.equal(new Set(WHEEL).size, 37);
+  assert.equal(WHEEL.filter(isRed).length, 18);
+  for (const result of WHEEL) {
+    const pose = roulettePose(result, 1);
+    const center = (WHEEL.indexOf(result) + .5) * Math.PI * 2 / 37;
+    assert.ok(Math.abs(Math.sin(pose.ball - pose.wheel - center)) < 1e-8, `ball must rest in pocket ${result}`);
+    assert.ok(Math.cos(pose.ball - pose.wheel - center) > .99999);
+    assert.ok(Math.abs(Math.sin(pose.ball)) < 1e-8, "settled pocket faces the table");
+    assert.ok(Math.abs(pose.radius - 1.29) < 1e-8);
+    for (let frame = 0; frame <= 100; frame++) {
+      const live = roulettePose(result, frame / 100);
+      assert.ok(live.radius >= 1.29 - 1e-8 && live.radius <= 1.98);
+      assert.ok(live.height >= .33 - 1e-8 && live.height <= .71);
+    }
+  }
+  const redBet = { id: "red", kind: "red" as const, amount: 10 };
+  assert.equal(WHEEL.reduce<number>((sum, result) => sum + settleRoulette([redBet], result).returned, 0), 360);
+  const base = createSave("Roulette test");
+  const spin: RouletteSpin = { id: "wheel-test", result: 17, bets: [{ id: "17", kind: "straight", n: 17, amount: 10 }, { id: "red", kind: "red", amount: 10 }], practice: false, startedAt: 0, endsAt: 7400 };
+  const started = gameReducer(base, { type: "roulette-spin", spin });
+  assert.equal(started.chips, 980);
+  assert.equal(gameReducer(started, { type: "roulette-spin", spin: { ...spin, id: "duplicate" } }), started);
+  assert.equal(gameReducer(started, { type: "roulette-settle", id: "old" }), started);
+  const paid = gameReducer(normalize(JSON.parse(JSON.stringify(started))), { type: "roulette-settle", id: spin.id });
+  assert.equal(paid.chips, 1340, "17 is black; only the straight bet pays 360");
+  assert.equal(paid.stats.biggestWin, 340);
+  assert.equal(paid.gamesPlayed.roulette, 1);
+  assert.deepEqual(paid.rouletteHistory, [17]);
+  assert.equal(gameReducer(paid, { type: "roulette-settle", id: spin.id }), paid);
+  const poor = { ...base, chips: 5 };
+  assert.equal(gameReducer(poor, { type: "roulette-spin", spin }), poor);
+  const practice = gameReducer(poor, { type: "roulette-spin", spin: { ...spin, practice: true } });
+  const done = gameReducer(practice, { type: "roulette-settle", id: spin.id });
+  assert.equal(done.chips, poor.chips);
+  assert.deepEqual(done.relationships, poor.relationships);
+  assert.deepEqual(done.stats, poor.stats);
+  assert.deepEqual(done.gamesPlayed, poor.gamesPlayed);
+  assert.equal(gameReducer(base, { type: "roulette-spin", spin: { ...spin, result: 37 } }), base);
+  assert.equal(normalize({ ...base, pendingRouletteSpin: { ...spin, bets: [] } }).pendingRouletteSpin, null);
+}
+
 testHands();
 testPokerRanks();
 testSidePot();
@@ -401,4 +479,6 @@ testBaccarat();
 testBlackjackRound();
 testSlots();
 testSlotTransactions();
+testChipBetting();
+testRouletteGeometryAndTransactions();
 console.log("rules ok");
