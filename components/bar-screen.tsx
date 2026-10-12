@@ -1,6 +1,7 @@
 "use client";
 
 import { CHARACTERS } from "@/lib/characters";
+import { assetPath } from "@/lib/assets";
 import { DRINKS, barPatrons } from "@/lib/presence";
 import { checkInScene, getScene, groupSceneAvailable, topicsFor } from "@/lib/story";
 import { useGame } from "@/lib/store";
@@ -22,7 +23,7 @@ export function BarScreen() {
 
   if (mode === "scene" && scene) {
     return (
-      <main className="scene-scrim min-h-[calc(100vh-64px)]" style={{ ["--scene" as string]: "url(/art/bg-bar.jpg)" }}>
+      <main className="scene-scrim min-h-[calc(100vh-64px)]" style={{ ["--scene" as string]: `url("${assetPath("/art/bg-bar.jpg")}")` }}>
         <ScenePlayer
           scene={scene}
           onClose={() => {
@@ -38,7 +39,7 @@ export function BarScreen() {
   const topics = topicsFor(state, active, "bar").concat(active === "aoi" ? topicsFor(state, active, "lobby") : []);
 
   return (
-    <main className="scene-scrim min-h-[calc(100vh-64px)]" style={{ ["--scene" as string]: "url(/art/bg-bar.jpg)" }}>
+    <main className="scene-scrim min-h-[calc(100vh-64px)]" style={{ ["--scene" as string]: `url("${assetPath("/art/bg-bar.jpg")}")` }}>
       <div className="mx-auto grid max-w-6xl gap-4 px-4 py-6 lg:grid-cols-[280px_1fr]">
         <aside className="rounded-3xl border border-white/10 bg-black/55 p-3">
           <h2 className="font-display px-2 text-3xl">Stools</h2>

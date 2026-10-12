@@ -1,6 +1,7 @@
 "use client";
 
 import { jazz } from "@/lib/audio";
+import { assetPath } from "@/lib/assets";
 import { cleanName, useGame } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +20,7 @@ export function TitleScreen() {
   return (
     <main
       className="relative min-h-screen bg-cover bg-center"
-      style={{ backgroundImage: "url(/art/bg-title.jpg)" }}
+      style={{ backgroundImage: `url("${assetPath("/art/bg-title.jpg")}")` }}
     >
       <div className="absolute inset-0 bg-gradient-to-r from-[#120812]/90 via-[#120812]/70 to-[#120812]/25" />
       <div className="relative mx-auto flex min-h-screen max-w-3xl flex-col justify-end px-6 py-16 sm:justify-center">

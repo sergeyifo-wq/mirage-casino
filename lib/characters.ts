@@ -1,4 +1,5 @@
 import type { CharacterId, GameId, Tone } from "@/lib/types";
+import { assetPath } from "@/lib/assets";
 
 export type CharacterDef = {
   id: CharacterId;
@@ -233,6 +234,6 @@ export function stageName(affinity: number, romance: RelationshipRomance): strin
 type RelationshipRomance = import("@/lib/types").Romance;
 
 export function portraitSrc(id: CharacterId, outfit: "uniform" | "evening" = "uniform"): string {
-  if (outfit === "evening" && EVENING_LOOKS.includes(id)) return `/art/${id}-evening.jpg`;
-  return `/art/${id}.jpg`;
+  if (outfit === "evening" && EVENING_LOOKS.includes(id)) return assetPath(`/art/${id}-evening.jpg`);
+  return assetPath(`/art/${id}.jpg`);
 }

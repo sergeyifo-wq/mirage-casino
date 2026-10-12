@@ -1,6 +1,7 @@
 "use client";
 
 import { CHARACTERS } from "@/lib/characters";
+import { assetPath } from "@/lib/assets";
 import { TIME_META, advanceTime, aoiLine, barPatrons, blackjackOpponents, pokerOpponents, roomLine } from "@/lib/presence";
 import { inviteHint } from "@/lib/progress";
 import { useGame } from "@/lib/store";
@@ -29,7 +30,7 @@ export function MapScreen() {
   };
 
   return (
-    <main className="relative min-h-[calc(100vh-64px)] bg-cover bg-center" style={{ backgroundImage: "url(/art/bg-floor.jpg)" }}>
+    <main className="relative min-h-[calc(100vh-64px)] bg-cover bg-center" style={{ backgroundImage: `url("${assetPath("/art/bg-floor.jpg")}")` }}>
       <div className="absolute inset-0 bg-[#120812]/72" />
       <div className="relative mx-auto max-w-6xl px-4 py-6">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3">

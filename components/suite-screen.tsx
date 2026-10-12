@@ -1,6 +1,7 @@
 "use client";
 
 import { themeBlurb } from "@/lib/progress";
+import { assetPath } from "@/lib/assets";
 import { NIGHTLY_ALLOWANCE } from "@/lib/presence";
 import { createSave, useGame, writeSave } from "@/lib/store";
 import type { ThemeId } from "@/lib/types";
@@ -29,7 +30,7 @@ export function SuiteScreen() {
   }
 
   return (
-    <main className="scene-scrim min-h-[calc(100vh-64px)]" style={{ ["--scene" as string]: "url(/art/bg-suite.jpg)" }}>
+    <main className="scene-scrim min-h-[calc(100vh-64px)]" style={{ ["--scene" as string]: `url("${assetPath("/art/bg-suite.jpg")}")` }}>
       <div className="mx-auto grid max-w-5xl gap-4 px-4 py-6 lg:grid-cols-[1.2fr_0.8fr]">
         <section className="rounded-3xl border border-white/10 bg-black/55 p-5">
           <p className="text-xs tracking-[0.28em] text-[#e4c27a] uppercase">Your suite</p>
