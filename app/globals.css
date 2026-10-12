@@ -197,12 +197,3 @@
 .deal-in {
   animation: deal-in 0.35s ease both;
 }
-
-@keyframes reel-spin {
-  from { transform: translateY(-40%); }
-  to { transform: translateY(0); }
-}
-
-.reel-spin {
-  animation: reel-spin 0.45s linear infinite;
-}

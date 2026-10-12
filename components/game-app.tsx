@@ -1,6 +1,7 @@
 "use client";
 
 import { jazz } from "@/lib/audio";
+import { assetPath } from "@/lib/assets";
 import { GameProvider, useGame } from "@/lib/store";
 import { getScene } from "@/lib/story";
 import { useEffect } from "react";
@@ -67,7 +68,7 @@ function Shell() {
   } else if (screen.name === "hotel") {
     const scene = getScene(screen.sceneId);
     view = scene ? (
-      <div className="scene-scrim min-h-[calc(100vh-64px)]" style={{ ["--scene" as string]: "url(/art/bg-suite.jpg)" }}>
+      <div className="scene-scrim min-h-[calc(100vh-64px)]" style={{ ["--scene" as string]: `url("${assetPath("/art/bg-suite.jpg")}")` }}>
         <ScenePlayer scene={scene} onClose={() => game.setScreen({ name: "map" })} />
       </div>
     ) : (

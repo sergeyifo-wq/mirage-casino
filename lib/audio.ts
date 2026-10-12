@@ -110,7 +110,7 @@ export const jazz = {
   },
 };
 
-export function playSfx(kind: "chip" | "card" | "win" | "lose", enabled: boolean) {
+export function playSfx(kind: "chip" | "card" | "win" | "lose" | "jackpot", enabled: boolean) {
   if (!enabled) return;
   const ctx = ensure();
   if (!ctx) return;
@@ -120,6 +120,8 @@ export function playSfx(kind: "chip" | "card" | "win" | "lose", enabled: boolean
     tone(1320, now + 0.06, 0.1, "sine", 0.04);
   } else if (kind === "card") {
     tone(240, now, 0.05, "triangle", 0.04);
+  } else if (kind === "jackpot") {
+    [523, 659, 784, 1047, 784, 1047].forEach((freq, index) => tone(freq, now + index * 0.1, 0.28, "triangle", 0.06));
   } else if (kind === "win") {
     [523, 659, 784].forEach((freq, index) => tone(freq, now + index * 0.08, 0.18, "triangle", 0.05));
   } else {

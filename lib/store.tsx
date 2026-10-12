@@ -2,7 +2,8 @@
 
 import { createContext, useContext, useEffect, useReducer, type Dispatch, type ReactNode } from "react";
 import { CHARACTER_IDS, CHARACTERS } from "@/lib/characters";
-import { COURTESY_STAKE, DRINKS, NIGHTLY_ALLOWANCE } from "@/lib/presence";
+import { COURTESY_STAKE, DRINKS, LIMITS, NIGHTLY_ALLOWANCE } from "@/lib/presence";
+import { isJackpot, isSymbolGrid, scoreGrid, SPIN_DURATION, type SlotSpin } from "@/lib/slots";
 import { advanceTime } from "@/lib/presence";
 import { blankRelationship, clampAffinity, derive, rapportDelta } from "@/lib/progress";
 import type {
@@ -42,6 +43,8 @@ export type Action =
   | { type: "courtesy" }
   | { type: "round"; game: GameId; live: boolean; profit: number; net?: number; with: CharacterId[]; dramatic?: CharacterId[] }
   | { type: "chips"; delta: number }
+  | { type: "slots-spin"; spin: SlotSpin }
+  | { type: "slots-settle"; id: string }
   | { type: "talked"; id: CharacterId }
   | {
       type: "choice";
@@ -174,7 +177,7 @@ function finishVisit(state: SaveState, id: CharacterId, end: "romantic" | "talk"
   };
 }
 
-function reducer(state: SaveState, action: Action): SaveState {
+export function gameReducer(state: SaveState, action: Action): SaveState {
   switch (action.type) {
     case "hydrate":
       return derive(normalize(action.state));
@@ -239,6 +242,25 @@ function reducer(state: SaveState, action: Action): SaveState {
           },
         ),
       );
+    }
+    case "slots-spin": {
+      if (state.pendingSlotSpin || !validSlotSpin(action.spin)) return state;
+      const spin = { ...action.spin, practice: action.spin.practice || state.time === "after", hosted: state.time !== "after" };
+      if (!spin.practice && state.chips < spin.bet) return state;
+      return derive({ ...state, chips: state.chips - (spin.practice ? 0 : spin.bet), pendingSlotSpin: spin });
+    }
+    case "slots-settle": {
+      const spin = state.pendingSlotSpin;
+      if (!spin || spin.id !== action.id) return state;
+      const scored = scoreGrid(spin.grid, spin.bet);
+      const next = { ...state, pendingSlotSpin: null, lastSlotSpin: spin };
+      if (spin.practice) return next;
+      return gameReducer(next, {
+        type: "round", game: "slots", live: true,
+        profit: scored.total, net: scored.total - spin.bet,
+        with: spin.hosted ? ["mika"] : [],
+        dramatic: spin.hosted && isJackpot(scored.lines) ? ["mika"] : [],
+      });
     }
     case "round": {
       const liveProfit = action.live ? action.profit : 0;
@@ -409,6 +431,12 @@ function rollLucky(state: SaveState, ids: CharacterId[]): SaveState {
   return next;
 }
 
+function validSlotSpin(spin: SlotSpin | null | undefined): spin is SlotSpin {
+  return !!spin && typeof spin.id === "string" && spin.id.length > 0 && isSymbolGrid(spin.grid)
+    && LIMITS.slots.some((bet) => bet === spin.bet) && Number.isFinite(spin.endsAt)
+    && typeof spin.practice === "boolean" && typeof spin.hosted === "boolean";
+}
+
 export function normalize(raw: Partial<SaveState> | null): SaveState {
   const base = createSave(raw?.playerName || "Traveler");
   if (!raw || raw.version !== 1) return base;
@@ -433,6 +461,8 @@ export function normalize(raw: Partial<SaveState> | null): SaveState {
     pendingInvites: raw.pendingInvites ?? [],
     openDoors: raw.openDoors ?? [],
     stats: { ...base.stats, ...raw.stats },
+    pendingSlotSpin: validSlotSpin(raw.pendingSlotSpin) ? raw.pendingSlotSpin : null,
+    lastSlotSpin: validSlotSpin(raw.lastSlotSpin) ? raw.lastSlotSpin : null,
   };
 }
 
@@ -464,7 +494,7 @@ type GameValue = {
 const GameContext = createContext<GameValue | null>(null);
 
 export function GameProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, null, () => createSave("Traveler"));
+  const [state, dispatch] = useReducer(gameReducer, null, () => createSave("Traveler"));
   const [screen, setScreen] = useReducer((_: Screen, next: Screen) => next, { name: "title" } as Screen);
   const [notice, setNotice] = useReducer((_: string | null, next: string | null) => next, null);
   const [ready, setReady] = useReducer(() => true, false);
@@ -482,6 +512,18 @@ export function GameProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (ready) writeSave(state);
   }, [state, ready]);
+
+  // The provider owns settlement, so navigation cannot cancel an accepted spin.
+  // A saved pending spin also resumes after a reload; its ID prevents double payment.
+  useEffect(() => {
+    const spin = state.pendingSlotSpin;
+    if (!ready || !spin) return;
+    const timer = window.setTimeout(
+      () => dispatch({ type: "slots-settle", id: spin.id }),
+      Math.max(0, Math.min(SPIN_DURATION, spin.endsAt - Date.now())),
+    );
+    return () => window.clearTimeout(timer);
+  }, [state.pendingSlotSpin, ready]);
 
   useEffect(() => {
     if (!notice) return;

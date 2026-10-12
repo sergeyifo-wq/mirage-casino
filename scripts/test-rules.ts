@@ -14,7 +14,8 @@ import {
 } from "../lib/blackjack";
 import { bestHand, act, aiMove, award, legalActions, stacksTotal, startHand, type Seat } from "../lib/poker";
 import { betWins, settleRoulette, spinWheel } from "../lib/roulette";
-import { PAYLINES, scoreGrid, spinReels, type SymbolId } from "../lib/slots";
+import { PAYLINES, SYMBOLS, isJackpot, linePayout, scoreGrid, spinReels, type SlotSpin, type SymbolId } from "../lib/slots";
+import { createSave, gameReducer, normalize } from "../lib/store";
 import { dealSequence, handTotal, outcomeOf, pip, settleBaccarat } from "../lib/baccarat";
 
 function card(rank: number, suit: Suit, id = `${suit}${rank}`): Card {
@@ -322,6 +323,22 @@ function testSlots() {
   const scored = scoreGrid(grid, 20);
   assert.ok(scored.lines.some((line) => line.symbol === "seven"));
   assert.equal(PAYLINES.length, 5);
+  assert.equal(scored.total, 225);
+  assert.deepEqual(scored.lines.map((line) => line.index), [0, 1]);
+  assert.equal(linePayout("cherry", 5), 6);
+  const wildGrid: SymbolId[][] = Array.from({ length: 3 }, () => ["wild", "wild", "wild"]);
+  assert.equal(scoreGrid(wildGrid, 10).total, 625);
+  assert.equal(isJackpot(scoreGrid(wildGrid, 10).lines), true);
+  assert.equal(isJackpot([{ index: 0, symbol: "gem", pay: 20, amount: 50 }]), false);
+
+  // Exhaust all 216 line combinations, including wilds in each position.
+  for (const a of SYMBOLS) for (const b of SYMBOLS) for (const c of SYMBOLS) {
+    const ids = [a.id, b.id, c.id];
+    const concrete = new Set(ids.filter((id) => id !== "wild"));
+    const expected = concrete.size > 1 ? 0 : Math.floor(25 * SYMBOLS.find((s) => s.id === (concrete.values().next().value ?? "wild"))!.pay / 4);
+    const candidate = ids.map((id): SymbolId[] => ["bell", id, "gem"]);
+    assert.equal(scoreGrid(candidate, 25).lines.find((line) => line.index === 0)?.amount ?? 0, expected);
+  }
   const rng = mulberry32(99);
   let stake = 0;
   let back = 0;
@@ -335,6 +352,45 @@ function testSlots() {
   assert.ok(rtp > 0.9 && rtp < 1.08, `unexpected rtp ${rtp}`);
 }
 
+function testSlotTransactions() {
+  const base = createSave("Slots test");
+  const spin: SlotSpin = {
+    id: "test-spin", bet: 25, practice: false, hosted: true, endsAt: 100,
+    grid: [["seven", "cherry", "bell"], ["seven", "cherry", "star"], ["seven", "wild", "gem"]],
+  };
+  const started = gameReducer(base, { type: "slots-spin", spin });
+  assert.equal(started.chips, 975, "stake reserved immediately");
+  assert.equal(started.stats.rounds, 0);
+  assert.equal(gameReducer(started, { type: "slots-spin", spin: { ...spin, id: "double-click" } }), started);
+  assert.equal(gameReducer(started, { type: "slots-settle", id: "stale-id" }), started);
+  const settled = gameReducer(started, { type: "slots-settle", id: spin.id });
+  assert.equal(settled.chips, base.chips - spin.bet + scoreGrid(spin.grid, spin.bet).total);
+  assert.equal(settled.stats.biggestWin, 256, "record net win, not gross payout");
+  assert.equal(settled.gamesPlayed.slots, 1);
+  assert.equal(settled.relationships.mika.realSessions, 1);
+  assert.equal(settled.pendingSlotSpin, null);
+  assert.equal(settled.lastSlotSpin?.id, spin.id);
+  assert.equal(gameReducer(settled, { type: "slots-settle", id: spin.id }), settled, "cannot pay twice");
+
+  const reloaded = normalize(JSON.parse(JSON.stringify(started)));
+  assert.equal(gameReducer(reloaded, { type: "slots-settle", id: spin.id }).chips, settled.chips, "reload retains outcome and reserved stake");
+  const poor = { ...base, chips: 0 };
+  assert.equal(gameReducer(poor, { type: "slots-spin", spin }), poor);
+  for (const state of [poor, { ...base, time: "after" as const }]) {
+    const practice = gameReducer(state, { type: "slots-spin", spin: { ...spin, practice: state.chips === 0 } });
+    assert.equal(practice.pendingSlotSpin?.practice, true);
+    const done = gameReducer(practice, { type: "slots-settle", id: spin.id });
+    assert.equal(done.chips, state.chips);
+    assert.deepEqual(done.stats, state.stats);
+    assert.deepEqual(done.relationships, state.relationships);
+    assert.deepEqual(done.gamesPlayed, state.gamesPlayed);
+  }
+  assert.equal(gameReducer(base, { type: "slots-spin", spin: { ...spin, bet: 999 } }), base);
+  assert.equal(gameReducer(base, { type: "slots-spin", spin: { ...spin, grid: [] } }), base);
+  assert.equal(normalize({ ...base, pendingSlotSpin: { ...spin, grid: [] } }).pendingSlotSpin, null);
+  assert.equal(normalize(base).chips, base.chips, "old saves remain compatible");
+}
+
 testHands();
 testPokerRanks();
 testSidePot();
@@ -344,4 +400,5 @@ testRoulette();
 testBaccarat();
 testBlackjackRound();
 testSlots();
+testSlotTransactions();
 console.log("rules ok");
