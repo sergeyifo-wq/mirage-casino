@@ -215,7 +215,7 @@ export function RouletteTable() {
         title="Roulette with Celeste"
         bullets={[
           "Choose a chip from your rack. Tap a number or an outside bet to place it, or drag the chip onto the felt. Repeat to build a stack.",
-          "European roulette has 37 numbered pockets and one zero. A straight number pays 35 to 1; even chances 1 to 1; dozens and columns 2 to 1. Winning stakes are returned too.",
+          "European roulette has 37 pockets, including a single zero. A straight number pays 35 to 1; even chances 1 to 1; dozens and columns 2 to 1. Winning stakes are returned too.",
           "Undo removes your last placement. Rebet restores your last layout. Each number allows 50 chips, with 300 chips across the table per spin.",
           "The ball settles into the same numbered pocket that pays your bets. Accepted spins finish even if you leave or reload. Practice spends nothing.",
         ]}
