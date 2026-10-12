@@ -1,11 +1,42 @@
 "use client";
 
-import { createContext, useContext, useEffect, useReducer, type Dispatch, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useReducer,
+  useRef,
+  useCallback,
+  type Dispatch,
+  type ReactNode,
+} from "react";
 import { CHARACTER_IDS, CHARACTERS } from "@/lib/characters";
-import { COURTESY_STAKE, DRINKS, LIMITS, NIGHTLY_ALLOWANCE } from "@/lib/presence";
-import { isJackpot, isSymbolGrid, scoreGrid, SPIN_DURATION, type SlotSpin } from "@/lib/slots";
+import {
+  COURTESY_STAKE,
+  DRINKS,
+  LIMITS,
+  NIGHTLY_ALLOWANCE,
+} from "@/lib/presence";
+import {
+  isJackpot,
+  isSymbolGrid,
+  scoreGrid,
+  SPIN_DURATION,
+  type SlotSpin,
+} from "@/lib/slots";
+import {
+  ROULETTE_SPIN_DURATION,
+  settleRoulette,
+  validRouletteSpin,
+  type RouletteSpin,
+} from "@/lib/roulette";
 import { advanceTime } from "@/lib/presence";
-import { blankRelationship, clampAffinity, derive, rapportDelta } from "@/lib/progress";
+import {
+  blankRelationship,
+  clampAffinity,
+  derive,
+  rapportDelta,
+} from "@/lib/progress";
 import type {
   CharacterId,
   ChoiceEffects,
@@ -41,10 +72,20 @@ export type Action =
   | { type: "advance-time" }
   | { type: "rest" }
   | { type: "courtesy" }
-  | { type: "round"; game: GameId; live: boolean; profit: number; net?: number; with: CharacterId[]; dramatic?: CharacterId[] }
+  | {
+      type: "round";
+      game: GameId;
+      live: boolean;
+      profit: number;
+      net?: number;
+      with: CharacterId[];
+      dramatic?: CharacterId[];
+    }
   | { type: "chips"; delta: number }
   | { type: "slots-spin"; spin: SlotSpin }
   | { type: "slots-settle"; id: string }
+  | { type: "roulette-spin"; spin: RouletteSpin }
+  | { type: "roulette-settle"; id: string }
   | { type: "talked"; id: CharacterId }
   | {
       type: "choice";
@@ -71,7 +112,9 @@ export function cleanName(name: string): string {
 }
 
 export function createSave(name: string): SaveState {
-  const relationships = Object.fromEntries(CHARACTER_IDS.map((id) => [id, blankRelationship()])) as SaveState["relationships"];
+  const relationships = Object.fromEntries(
+    CHARACTER_IDS.map((id) => [id, blankRelationship()]),
+  ) as SaveState["relationships"];
   const state: SaveState = {
     version: 1,
     playerName: cleanName(name),
@@ -114,19 +157,35 @@ function journalEntry(state: SaveState, entry: JournalEntry): SaveState {
   return { ...state, journal: [...state.journal, entry] };
 }
 
-function addMemory(state: SaveState, id: CharacterId, memoryId: string, text: string): SaveState {
+function addMemory(
+  state: SaveState,
+  id: CharacterId,
+  memoryId: string,
+  text: string,
+): SaveState {
   const rel = state.relationships[id];
   if (rel.memories.some((memory) => memory.id === memoryId)) return state;
   return {
     ...state,
     relationships: {
       ...state.relationships,
-      [id]: { ...rel, memories: [...rel.memories, { id: memoryId, text, evening: state.evening }].slice(-12) },
+      [id]: {
+        ...rel,
+        memories: [
+          ...rel.memories,
+          { id: memoryId, text, evening: state.evening },
+        ].slice(-12),
+      },
     },
   };
 }
 
-function bump(state: SaveState, id: CharacterId, tone: Tone, bonus = 0): SaveState {
+function bump(
+  state: SaveState,
+  id: CharacterId,
+  tone: Tone,
+  bonus = 0,
+): SaveState {
   const rel = state.relationships[id];
   const delta = rapportDelta(id, tone, rel.affinity) + bonus;
   return {
@@ -136,13 +195,20 @@ function bump(state: SaveState, id: CharacterId, tone: Tone, bonus = 0): SaveSta
       [id]: {
         ...rel,
         affinity: clampAffinity(rel.affinity + delta),
-        tones: { ...rel.tones, [tone]: rel.tones[tone] + (tone === "leave" ? 0 : 1) },
+        tones: {
+          ...rel.tones,
+          [tone]: rel.tones[tone] + (tone === "leave" ? 0 : 1),
+        },
       },
     },
   };
 }
 
-function finishVisit(state: SaveState, id: CharacterId, end: "romantic" | "talk" | "leave"): SaveState {
+function finishVisit(
+  state: SaveState,
+  id: CharacterId,
+  end: "romantic" | "talk" | "leave",
+): SaveState {
   const rel = state.relationships[id];
   let romance = rel.romance;
   if (end === "romantic") romance = "close";
@@ -172,7 +238,11 @@ function finishVisit(state: SaveState, id: CharacterId, end: "romantic" | "talk"
     openDoors: next.openDoors.filter((door) => door !== id),
     relationships: {
       ...next.relationships,
-      [id]: { ...next.relationships[id], romance, visitedEvening: state.evening },
+      [id]: {
+        ...next.relationships[id],
+        romance,
+        visitedEvening: state.evening,
+      },
     },
   };
 }
@@ -188,14 +258,16 @@ export function gameReducer(state: SaveState, action: Action): SaveState {
     case "advance-time": {
       const time = advanceTime(state.time);
       if (!time) return state;
-      const flags = time === "after" ? { ...state.flags, after_hours: true } : state.flags;
+      const flags =
+        time === "after" ? { ...state.flags, after_hours: true } : state.flags;
       return derive({ ...state, time, flags });
     }
     case "rest": {
       const relationships = { ...state.relationships };
       if (state.pendingInvites.length) {
         for (const id of state.pendingInvites) {
-          if (relationships[id].romance === "pending") relationships[id] = { ...relationships[id], romance: "none" };
+          if (relationships[id].romance === "pending")
+            relationships[id] = { ...relationships[id], romance: "none" };
         }
       }
       let next: SaveState = {
@@ -228,10 +300,15 @@ export function gameReducer(state: SaveState, action: Action): SaveState {
       return derive(next);
     }
     case "courtesy": {
-      if (state.courtesyEvening === state.evening || state.chips >= 10) return state;
+      if (state.courtesyEvening === state.evening || state.chips >= 10)
+        return state;
       return derive(
         journalEntry(
-          { ...state, chips: state.chips + COURTESY_STAKE, courtesyEvening: state.evening },
+          {
+            ...state,
+            chips: state.chips + COURTESY_STAKE,
+            courtesyEvening: state.evening,
+          },
           {
             id: `courtesy-${state.evening}`,
             evening: state.evening,
@@ -245,9 +322,17 @@ export function gameReducer(state: SaveState, action: Action): SaveState {
     }
     case "slots-spin": {
       if (state.pendingSlotSpin || !validSlotSpin(action.spin)) return state;
-      const spin = { ...action.spin, practice: action.spin.practice || state.time === "after", hosted: state.time !== "after" };
+      const spin = {
+        ...action.spin,
+        practice: action.spin.practice || state.time === "after",
+        hosted: state.time !== "after",
+      };
       if (!spin.practice && state.chips < spin.bet) return state;
-      return derive({ ...state, chips: state.chips - (spin.practice ? 0 : spin.bet), pendingSlotSpin: spin });
+      return derive({
+        ...state,
+        chips: state.chips - (spin.practice ? 0 : spin.bet),
+        pendingSlotSpin: spin,
+      });
     }
     case "slots-settle": {
       const spin = state.pendingSlotSpin;
@@ -256,10 +341,53 @@ export function gameReducer(state: SaveState, action: Action): SaveState {
       const next = { ...state, pendingSlotSpin: null, lastSlotSpin: spin };
       if (spin.practice) return next;
       return gameReducer(next, {
-        type: "round", game: "slots", live: true,
-        profit: scored.total, net: scored.total - spin.bet,
+        type: "round",
+        game: "slots",
+        live: true,
+        profit: scored.total,
+        net: scored.total - spin.bet,
         with: spin.hosted ? ["mika"] : [],
         dramatic: spin.hosted && isJackpot(scored.lines) ? ["mika"] : [],
+      });
+    }
+    case "roulette-spin": {
+      if (state.pendingRouletteSpin || !validRouletteSpin(action.spin))
+        return state;
+      const stake = action.spin.bets.reduce((sum, bet) => sum + bet.amount, 0);
+      if (!action.spin.practice && stake > state.chips) return state;
+      return derive({
+        ...state,
+        chips: state.chips - (action.spin.practice ? 0 : stake),
+        pendingRouletteSpin: action.spin,
+      });
+    }
+    case "roulette-settle": {
+      const spin = state.pendingRouletteSpin;
+      if (!spin || spin.id !== action.id) return state;
+      const paid = settleRoulette(spin.bets, spin.result).returned;
+      const stake = spin.bets.reduce((sum, bet) => sum + bet.amount, 0);
+      const next = {
+        ...state,
+        pendingRouletteSpin: null,
+        lastRouletteSpin: spin,
+        rouletteHistory: [spin.result, ...(state.rouletteHistory ?? [])].slice(
+          0,
+          12,
+        ),
+      };
+      if (spin.practice) return next;
+      return gameReducer(next, {
+        type: "round",
+        game: "roulette",
+        live: true,
+        profit: paid,
+        net: paid - stake,
+        with: ["celeste"],
+        dramatic: spin.bets.some(
+          (bet) => bet.kind === "straight" && bet.n === spin.result,
+        )
+          ? ["celeste"]
+          : [],
       });
     }
     case "round": {
@@ -268,24 +396,36 @@ export function gameReducer(state: SaveState, action: Action): SaveState {
       const relationships = { ...state.relationships };
       if (action.live) {
         for (const id of action.with) {
-          relationships[id] = { ...relationships[id], realSessions: relationships[id].realSessions + 1 };
+          relationships[id] = {
+            ...relationships[id],
+            realSessions: relationships[id].realSessions + 1,
+          };
         }
       }
       let next: SaveState = {
         ...state,
         chips,
         relationships,
-        gamesPlayed: { ...state.gamesPlayed, [action.game]: state.gamesPlayed[action.game] + 1 },
+        gamesPlayed: {
+          ...state.gamesPlayed,
+          [action.game]: state.gamesPlayed[action.game] + 1,
+        },
         stats: {
           rounds: state.stats.rounds + 1,
-          biggestWin: Math.max(state.stats.biggestWin, action.live ? (action.net ?? liveProfit) : state.stats.biggestWin),
+          biggestWin: Math.max(
+            state.stats.biggestWin,
+            action.live ? (action.net ?? liveProfit) : state.stats.biggestWin,
+          ),
         },
       };
       if (action.dramatic?.length) next = rollLucky(next, action.dramatic);
       return derive(next);
     }
     case "chips":
-      return derive({ ...state, chips: Math.max(0, state.chips + action.delta) });
+      return derive({
+        ...state,
+        chips: Math.max(0, state.chips + action.delta),
+      });
     case "talked": {
       const rel = state.relationships[action.id];
       return {
@@ -306,18 +446,30 @@ export function gameReducer(state: SaveState, action: Action): SaveState {
           flags: { ...next.flags, [talkKey]: true },
           relationships: {
             ...next.relationships,
-            [action.characterId]: { ...rel, conversations: rel.conversations + 1 },
+            [action.characterId]: {
+              ...rel,
+              conversations: rel.conversations + 1,
+            },
           },
         };
       }
-      const people = action.affects?.length ? action.affects : [action.characterId];
+      const people = action.affects?.length
+        ? action.affects
+        : [action.characterId];
       for (const id of people) {
-        const extra = id === action.characterId ? (action.effects?.affinity ?? 0) : 0;
-        const other = action.effects?.others?.find((item) => item.id === id)?.affinity ?? 0;
+        const extra =
+          id === action.characterId ? (action.effects?.affinity ?? 0) : 0;
+        const other =
+          action.effects?.others?.find((item) => item.id === id)?.affinity ?? 0;
         next = bump(next, id, action.tone, extra + other);
       }
       if (action.effects?.memory) {
-        next = addMemory(next, action.characterId, `${action.sceneId}:${action.choiceId}`, action.effects.memory);
+        next = addMemory(
+          next,
+          action.characterId,
+          `${action.sceneId}:${action.choiceId}`,
+          action.effects.memory,
+        );
       }
       if (action.effects?.journal) {
         next = journalEntry(next, {
@@ -335,20 +487,32 @@ export function gameReducer(state: SaveState, action: Action): SaveState {
         next = { ...next, flags };
       }
       if (action.effects?.completeScene) {
-        next = { ...next, flags: { ...next.flags, [`seen:${action.sceneId}`]: true } };
+        next = {
+          ...next,
+          flags: { ...next.flags, [`seen:${action.sceneId}`]: true },
+        };
       }
       if (action.effects?.markGroup) {
-        next = { ...next, groupEvening: next.evening, flags: { ...next.flags, group_bluff: true } };
+        next = {
+          ...next,
+          groupEvening: next.evening,
+          flags: { ...next.flags, group_bluff: true },
+        };
       }
       if (action.effects?.acceptInvite) {
         const rel = next.relationships[action.characterId];
         next = {
           ...next,
-          pendingInvites: next.pendingInvites.filter((id) => id !== action.characterId),
+          pendingInvites: next.pendingInvites.filter(
+            (id) => id !== action.characterId,
+          ),
           openDoors: [...new Set([...next.openDoors, action.characterId])],
           relationships: {
             ...next.relationships,
-            [action.characterId]: { ...rel, romance: rel.romance === "close" ? "close" : "accepted" },
+            [action.characterId]: {
+              ...rel,
+              romance: rel.romance === "close" ? "close" : "accepted",
+            },
           },
         };
       }
@@ -356,10 +520,16 @@ export function gameReducer(state: SaveState, action: Action): SaveState {
         const rel = next.relationships[action.characterId];
         next = {
           ...next,
-          pendingInvites: next.pendingInvites.filter((id) => id !== action.characterId),
+          pendingInvites: next.pendingInvites.filter(
+            (id) => id !== action.characterId,
+          ),
           relationships: {
             ...next.relationships,
-            [action.characterId]: { ...rel, romance: "declined", declinedUntil: next.evening + 2 },
+            [action.characterId]: {
+              ...rel,
+              romance: "declined",
+              declinedUntil: next.evening + 2,
+            },
           },
         };
         next = journalEntry(next, {
@@ -371,7 +541,10 @@ export function gameReducer(state: SaveState, action: Action): SaveState {
           characterId: action.characterId,
         });
       }
-      if (action.effects?.end && (action.place === "hotel" || action.place === "encore")) {
+      if (
+        action.effects?.end &&
+        (action.place === "hotel" || action.place === "encore")
+      ) {
         next = finishVisit(next, action.characterId, action.effects.end);
       }
       return derive(next);
@@ -381,21 +554,40 @@ export function gameReducer(state: SaveState, action: Action): SaveState {
     case "drink": {
       const drink = DRINKS.find((item) => item.id === action.drinkId);
       if (!drink || state.chips < drink.price) return state;
-      let next: SaveState = { ...state, chips: state.chips - drink.price, drinks: state.drinks + 1 };
+      let next: SaveState = {
+        ...state,
+        chips: state.chips - drink.price,
+        drinks: state.drinks + 1,
+      };
       if (action.with && drink.likes.includes(action.with)) {
         next = bump(next, action.with, "friendly", 2);
-        next = addMemory(next, action.with, `drink-${drink.id}-${action.with}`, `${CHARACTERS[action.with].name} noticed you ordered ${drink.name}.`);
+        next = addMemory(
+          next,
+          action.with,
+          `drink-${drink.id}-${action.with}`,
+          `${CHARACTERS[action.with].name} noticed you ordered ${drink.name}.`,
+        );
       }
       return derive(next);
     }
     case "tutorial":
-      return { ...state, tutorialsSeen: { ...state.tutorialsSeen, [action.id]: true } };
+      return {
+        ...state,
+        tutorialsSeen: { ...state.tutorialsSeen, [action.id]: true },
+      };
     case "theme":
       if (!state.unlockedThemes.includes(action.theme)) return state;
       return { ...state, theme: action.theme };
     case "outfit":
-      if (action.outfit === "evening" && !state.unlockedOutfits.includes(action.id)) return state;
-      return { ...state, outfits: { ...state.outfits, [action.id]: action.outfit } };
+      if (
+        action.outfit === "evening" &&
+        !state.unlockedOutfits.includes(action.id)
+      )
+        return state;
+      return {
+        ...state,
+        outfits: { ...state.outfits, [action.id]: action.outfit },
+      };
     case "toggle-music":
       return { ...state, music: !state.music };
     case "toggle-sfx":
@@ -432,9 +624,16 @@ function rollLucky(state: SaveState, ids: CharacterId[]): SaveState {
 }
 
 function validSlotSpin(spin: SlotSpin | null | undefined): spin is SlotSpin {
-  return !!spin && typeof spin.id === "string" && spin.id.length > 0 && isSymbolGrid(spin.grid)
-    && LIMITS.slots.some((bet) => bet === spin.bet) && Number.isFinite(spin.endsAt)
-    && typeof spin.practice === "boolean" && typeof spin.hosted === "boolean";
+  return (
+    !!spin &&
+    typeof spin.id === "string" &&
+    spin.id.length > 0 &&
+    isSymbolGrid(spin.grid) &&
+    LIMITS.slots.some((bet) => bet === spin.bet) &&
+    Number.isFinite(spin.endsAt) &&
+    typeof spin.practice === "boolean" &&
+    typeof spin.hosted === "boolean"
+  );
 }
 
 export function normalize(raw: Partial<SaveState> | null): SaveState {
@@ -443,7 +642,10 @@ export function normalize(raw: Partial<SaveState> | null): SaveState {
   const relationships = { ...base.relationships };
   for (const id of CHARACTER_IDS) {
     relationships[id] = { ...blankRelationship(), ...raw.relationships?.[id] };
-    relationships[id].tones = { ...blankRelationship().tones, ...raw.relationships?.[id]?.tones };
+    relationships[id].tones = {
+      ...blankRelationship().tones,
+      ...raw.relationships?.[id]?.tones,
+    };
     relationships[id].memories = raw.relationships?.[id]?.memories ?? [];
   }
   return {
@@ -454,15 +656,30 @@ export function normalize(raw: Partial<SaveState> | null): SaveState {
     flags: raw.flags ?? {},
     journal: raw.journal?.length ? raw.journal : base.journal,
     tutorialsSeen: raw.tutorialsSeen ?? {},
-    unlockedThemes: raw.unlockedThemes?.length ? raw.unlockedThemes : ["velvet"],
+    unlockedThemes: raw.unlockedThemes?.length
+      ? raw.unlockedThemes
+      : ["velvet"],
     outfits: raw.outfits ?? {},
     unlockedOutfits: raw.unlockedOutfits ?? [],
     gamesPlayed: { ...base.gamesPlayed, ...raw.gamesPlayed },
     pendingInvites: raw.pendingInvites ?? [],
     openDoors: raw.openDoors ?? [],
     stats: { ...base.stats, ...raw.stats },
-    pendingSlotSpin: validSlotSpin(raw.pendingSlotSpin) ? raw.pendingSlotSpin : null,
+    pendingSlotSpin: validSlotSpin(raw.pendingSlotSpin)
+      ? raw.pendingSlotSpin
+      : null,
     lastSlotSpin: validSlotSpin(raw.lastSlotSpin) ? raw.lastSlotSpin : null,
+    pendingRouletteSpin: validRouletteSpin(raw.pendingRouletteSpin)
+      ? raw.pendingRouletteSpin
+      : null,
+    lastRouletteSpin: validRouletteSpin(raw.lastRouletteSpin)
+      ? raw.lastRouletteSpin
+      : null,
+    rouletteHistory: Array.isArray(raw.rouletteHistory)
+      ? raw.rouletteHistory
+          .filter((n) => Number.isInteger(n) && n >= 0 && n <= 36)
+          .slice(0, 12)
+      : [],
   };
 }
 
@@ -485,6 +702,7 @@ type GameValue = {
   dispatch: Dispatch<Action>;
   screen: Screen;
   setScreen: (screen: Screen) => void;
+  setTableExitLock: (message: string | null) => void;
   notice: string | null;
   toast: (message: string) => void;
   ready: boolean;
@@ -494,11 +712,32 @@ type GameValue = {
 const GameContext = createContext<GameValue | null>(null);
 
 export function GameProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(gameReducer, null, () => createSave("Traveler"));
-  const [screen, setScreen] = useReducer((_: Screen, next: Screen) => next, { name: "title" } as Screen);
-  const [notice, setNotice] = useReducer((_: string | null, next: string | null) => next, null);
+  const [state, dispatch] = useReducer(gameReducer, null, () =>
+    createSave("Traveler"),
+  );
+  const [screen, changeScreen] = useReducer((_: Screen, next: Screen) => next, {
+    name: "title",
+  } as Screen);
+  const [notice, setNotice] = useReducer(
+    (_: string | null, next: string | null) => next,
+    null,
+  );
+  const exitLock = useRef<string | null>(null);
+  const setTableExitLock = useCallback((message: string | null) => {
+    exitLock.current = message;
+  }, []);
+  const setScreen = useCallback((next: Screen) => {
+    if (exitLock.current) {
+      setNotice(exitLock.current);
+      return;
+    }
+    changeScreen(next);
+  }, []);
   const [ready, setReady] = useReducer(() => true, false);
-  const [existingSave, setExistingSave] = useReducer((_: boolean, next: boolean) => next, false);
+  const [existingSave, setExistingSave] = useReducer(
+    (_: boolean, next: boolean) => next,
+    false,
+  );
 
   useEffect(() => {
     const saved = loadSave();
@@ -526,13 +765,35 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, [state.pendingSlotSpin, ready]);
 
   useEffect(() => {
+    const spin = state.pendingRouletteSpin;
+    if (!ready || !spin) return;
+    const timer = window.setTimeout(
+      () => dispatch({ type: "roulette-settle", id: spin.id }),
+      Math.max(0, Math.min(ROULETTE_SPIN_DURATION, spin.endsAt - Date.now())),
+    );
+    return () => window.clearTimeout(timer);
+  }, [state.pendingRouletteSpin, ready]);
+
+  useEffect(() => {
     if (!notice) return;
     const timer = window.setTimeout(() => setNotice(null), 3200);
     return () => window.clearTimeout(timer);
   }, [notice]);
 
   return (
-    <GameContext.Provider value={{ state, dispatch, screen, setScreen, notice, toast: setNotice, ready, existingSave }}>
+    <GameContext.Provider
+      value={{
+        state,
+        dispatch,
+        screen,
+        setScreen,
+        setTableExitLock,
+        notice,
+        toast: setNotice,
+        ready,
+        existingSave,
+      }}
+    >
       {children}
     </GameContext.Provider>
   );
@@ -542,4 +803,13 @@ export function useGame(): GameValue {
   const value = useContext(GameContext);
   if (!value) throw new Error("useGame must be used inside GameProvider");
   return value;
+}
+
+/** Interactive hands must finish or cash out before navigation can discard them. */
+export function useTableExitLock(active: boolean, message: string) {
+  const { setTableExitLock } = useGame();
+  useEffect(() => {
+    setTableExitLock(active ? message : null);
+    return () => setTableExitLock(null);
+  }, [active, message, setTableExitLock]);
 }

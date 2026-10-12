@@ -29,6 +29,7 @@ import { topicsFor } from "@/lib/story";
 import { useGame } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { ChipRack } from "@/components/casino-chips";
 import { HostRail, RulesButton, Tutorial, money } from "@/components/widgets";
 import styles from "./slots-table.module.css";
 
@@ -219,7 +220,7 @@ export function SlotsTable() {
       <section className={styles.table} aria-label="Mirage slot machine">
         <div className={styles.toolbar}>
           <span className={styles.eyebrow}>
-            The midnight collection · No. 03
+            The midnight collection · No. 04
           </span>
           <div className="flex flex-wrap gap-2">
             <RulesButton
@@ -369,25 +370,7 @@ export function SlotsTable() {
               <p className={styles.controlLabel}>
                 Stake · all 5 lines included
               </p>
-              <div
-                className={styles.stakes}
-                role="group"
-                aria-label="Select total stake"
-              >
-                {LIMITS.slots.map((value) => (
-                  <button
-                    type="button"
-                    key={value}
-                    aria-pressed={bet === value}
-                    disabled={
-                      spinning || (!practiceMode && state.chips < value)
-                    }
-                    onClick={() => setBet(value)}
-                  >
-                    {money(value)}
-                  </button>
-                ))}
-              </div>
+              <ChipRack values={LIMITS.slots} selected={bet} onSelect={setBet} disabled={spinning} unavailable={practiceMode ? [] : LIMITS.slots.filter((value) => state.chips < value)} small label="Select total stake" />
             </div>
             <button
               type="button"

@@ -2,14 +2,29 @@
 
 import { playSfx } from "@/lib/audio";
 import { pickLine } from "@/lib/banter";
-import { dealBaccarat, handTotal, outcomeOf, settleBaccarat, type BaccaratHand, type Side } from "@/lib/baccarat";
+import {
+  dealBaccarat,
+  handTotal,
+  outcomeOf,
+  settleBaccarat,
+  type BaccaratHand,
+  type Side,
+} from "@/lib/baccarat";
 import { LIMITS } from "@/lib/presence";
 import { topicsFor } from "@/lib/story";
 import { useGame } from "@/lib/store";
+import { validWager } from "@/lib/chips";
+import { ChipBetControl } from "@/components/casino-chips";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { HostRail, PlayingCard, RulesButton, Stepper, Tutorial, money } from "@/components/widgets";
+import {
+  HostRail,
+  PlayingCard,
+  RulesButton,
+  Tutorial,
+  money,
+} from "@/components/widgets";
 
 export function BaccaratTable() {
   const { state, dispatch, setScreen, toast } = useGame();
@@ -17,11 +32,28 @@ export function BaccaratTable() {
   const [amount, setAmount] = useState(40);
   const [side, setSide] = useState<Side>("player");
   const [hand, setHand] = useState<BaccaratHand | null>(null);
-  const [note, setNote] = useState("Shiori waits for a bet. She will explain the draw if you want the rule.");
+  const [receipt, setReceipt] = useState<{
+    side: Side;
+    amount: number;
+    returned: number;
+    practice: boolean;
+  } | null>(null);
+  const [note, setNote] = useState(
+    "Shiori waits for a bet. She will explain the draw if you want the rule.",
+  );
   const [line, setLine] = useState(pickLine("shiori", "greet", 4));
   const topics = topicsFor(state, "shiori", "table");
 
   function deal() {
+    if (
+      !validWager(
+        amount,
+        LIMITS.baccarat.min,
+        LIMITS.baccarat.max,
+        LIMITS.baccarat.step,
+      )
+    )
+      return;
     if (!practice && state.chips < amount) {
       toast("The stake is larger than your rack.");
       return;
@@ -29,6 +61,7 @@ export function BaccaratTable() {
     const dealt = dealBaccarat();
     const returned = settleBaccarat(dealt, [{ side, amount }]);
     const profit = returned - amount;
+    setReceipt({ side, amount, returned, practice });
     setHand(dealt);
     setNote(dealt.notes.join(" "));
     if (!practice) {
@@ -43,7 +76,13 @@ export function BaccaratTable() {
       });
     }
     const outcome = outcomeOf(dealt);
-    const key = dealt.natural ? "natural" : outcome === "tie" ? "tie" : profit > 0 ? "win" : "lose";
+    const key = dealt.natural
+      ? "natural"
+      : outcome === "tie"
+        ? "tie"
+        : profit > 0
+          ? "win"
+          : "lose";
     setLine(pickLine("shiori", practice ? "practice" : key, amount));
     playSfx(profit > 0 ? "win" : "card", state.sfx);
   }
@@ -51,7 +90,7 @@ export function BaccaratTable() {
   const outcome = hand ? outcomeOf(hand) : null;
 
   return (
-    <main className="mx-auto grid max-w-6xl gap-4 px-3 py-4 lg:grid-cols-[240px_1fr]">
+    <main className="casino-table-layout">
       <Tutorial
         id="baccarat"
         title="Baccarat with Shiori"
@@ -62,11 +101,17 @@ export function BaccaratTable() {
           "Banker wins pay 0.95 to 1. Ties pay 8 to 1 and push the other bets. Ask Shiori why.",
         ]}
       />
-      <HostRail host="shiori" line={line} aside="Exact, and warmer once the quiet is shared." />
+      <HostRail
+        host="shiori"
+        line={line}
+        aside="Exact, and warmer once the quiet is shared."
+      />
       <section className="felt rounded-[28px] p-4 text-[#f7f1e6]">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-display text-4xl">Baccarat</h2>
-          <div className="flex gap-2">
+          <h2 className="table-heading">
+            <small>The art of a quiet wager · No. 05</small>Baccarat
+          </h2>
+          <div className="flex flex-wrap gap-2">
             <RulesButton
               title="Punto banco"
               body={[
@@ -77,11 +122,30 @@ export function BaccaratTable() {
               ]}
             />
             {topics.slice(0, 1).map((topic) => (
-              <Button key={topic.id} size="sm" variant="outline" className="bg-black/20" onClick={() => setScreen({ name: "dialogue", sceneId: topic.id, back: { name: "baccarat" } })}>
+              <Button
+                key={topic.id}
+                size="sm"
+                variant="outline"
+                className="bg-black/20"
+                onClick={() =>
+                  setScreen({
+                    name: "dialogue",
+                    sceneId: topic.id,
+                    back: { name: "baccarat" },
+                  })
+                }
+              >
                 Talk with Shiori
               </Button>
             ))}
-            <Button size="sm" variant="outline" className="bg-black/20" onClick={() => setScreen({ name: "map" })}>Leave</Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="bg-black/20"
+              onClick={() => setScreen({ name: "map" })}
+            >
+              Leave
+            </Button>
           </div>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
@@ -95,21 +159,55 @@ export function BaccaratTable() {
             {hand?.natural ? " · natural" : ""}
           </p>
         )}
-        <div className="mt-4 flex flex-wrap items-center gap-2">
+        <div className="wager-well mt-4 flex flex-wrap items-center gap-3">
           {(["player", "banker", "tie"] as Side[]).map((option) => (
-            <Button key={option} variant={side === option ? "default" : "outline"} className={`capitalize ${side === option ? "" : "bg-black/25"}`} onClick={() => setSide(option)}>
+            <Button
+              key={option}
+              variant={side === option ? "default" : "outline"}
+              className={`capitalize ${side === option ? "" : "bg-black/25"}`}
+              onClick={() => setSide(option)}
+            >
               {option}
             </Button>
           ))}
-          <Stepper value={amount} min={LIMITS.baccarat.min} max={Math.min(LIMITS.baccarat.max, practice ? LIMITS.baccarat.max : Math.max(LIMITS.baccarat.min, state.chips))} step={LIMITS.baccarat.step} onChange={setAmount} />
-          <label className="flex items-center gap-2 text-sm"><Switch checked={practice} onCheckedChange={setPractice} /> Practice</label>
-          <Button className="h-11" onClick={deal}>Deal</Button>
+          <ChipBetControl
+            value={amount}
+            min={LIMITS.baccarat.min}
+            max={Math.min(
+              LIMITS.baccarat.max,
+              practice ? LIMITS.baccarat.max : state.chips,
+            )}
+            step={LIMITS.baccarat.step}
+            onChange={setAmount}
+            label={`${side[0].toUpperCase() + side.slice(1)} wager`}
+          />
+          <label className="flex items-center gap-2 text-sm">
+            <Switch checked={practice} onCheckedChange={setPractice} /> Practice
+          </label>
+          <Button
+            className="h-11"
+            disabled={
+              !validWager(
+                amount,
+                LIMITS.baccarat.min,
+                LIMITS.baccarat.max,
+                LIMITS.baccarat.step,
+              ) ||
+              (!practice && amount > state.chips)
+            }
+            onClick={deal}
+          >
+            Deal
+          </Button>
         </div>
-        {hand && (
+        {receipt && (
           <p className="mt-3 text-sm">
-            {practice
-              ? "Practice hand. Your rack did not move."
-              : `Returned ${money(settleBaccarat(hand, [{ side, amount }]))} on a ${money(amount)} ${side} bet.`}
+            {receipt.practice ? "Practice · " : ""}Returned{" "}
+            {money(receipt.returned)} on the last {money(receipt.amount)}{" "}
+            {receipt.side} bet. Net{" "}
+            {receipt.returned - receipt.amount >= 0 ? "+" : ""}
+            {money(receipt.returned - receipt.amount)} chips.
+            {receipt.practice ? " Your rack did not move." : ""}
           </p>
         )}
       </section>
@@ -117,12 +215,25 @@ export function BaccaratTable() {
   );
 }
 
-function HandView({ title, cards }: { title: string; cards?: BaccaratHand["player"] }) {
+function HandView({
+  title,
+  cards,
+}: {
+  title: string;
+  cards?: BaccaratHand["player"];
+}) {
   return (
-    <div className="rounded-2xl bg-black/20 p-3">
-      <div className="mb-2 text-xs tracking-[0.2em] text-(--rim) uppercase">{title}{cards ? ` · ${handTotal(cards)}` : ""}</div>
-      <div className="flex gap-2">
-        {cards ? cards.map((card) => <PlayingCard key={card.id} card={card} />) : <PlayingCard hidden />}
+    <div className="card-seat">
+      <div className="mb-2 text-xs tracking-[0.2em] text-(--rim) uppercase">
+        {title}
+        {cards ? ` · ${handTotal(cards)}` : ""}
+      </div>
+      <div className="card-row">
+        {cards ? (
+          cards.map((card) => <PlayingCard key={card.id} card={card} />)
+        ) : (
+          <PlayingCard hidden />
+        )}
       </div>
     </div>
   );

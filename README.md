@@ -37,12 +37,17 @@ Saves are stored per website in your browser. To bring progress from the Vercel 
 
 - **Floor map** — blackjack, poker, roulette, slots, baccarat, the bar, and your suite. Let the hour pass from early evening to after hours. Who is seated changes.
 - **Tables** — real rules, bet controls, practice mode, and a short tutorial the first time you sit down.
+- **House deck & design** — crisp vector suits, traditional pip arrangements, mirrored court illustrations, ivory card stock, and a custom burgundy-and-gold card back. The portrait-led floor, gilt header, textured felt and framed seats share one house style, with responsive layouts and reduced-motion support.
+- **Chip betting** — striped house chips, visible stacks on the felt, tap/drag placement, and undo/clear controls. Blackjack, baccarat and poker buy-ins use a chip tray; slots use chip stakes.
+- **European roulette** — a lit 3D walnut-and-brass wheel with 37 numbered pockets, raised separators, a counter-rotating ball, and table/overhead views. The ball settles in the pocket that pays the saved spin. Undo, rebet, recent results, and a full payout receipt keep the layout clear; accepted spins finish across navigation or reload. A classic wheel is available when 3D rendering is unavailable.
 - **Mirage Reels** — illustrated symbols, staggered reel stops, five selectable payline previews, and a paytable that shows chip payouts at your chosen stake. One stake covers all five lines. Accepted spins are saved and settle once even if you leave or reload. After hours is practice only.
 - **People** — hosts and regulars have their own voices. Reply between hands, or sit at the bar for a longer talk. They remember the tone you use.
 - **Invitations** — chemistry, conversation, and time of night. A full rack does not open a door.
 - **Suite** — nightly allowance of 500 chips, table themes, off-duty portraits, and the relationship journal.
 
 Jazz is synthesized in the browser. No account and no remote API.
+
+Live blackjack hands must finish before leaving. Poker stacks must be cashed out or folded out through the table controls so ordinary navigation cannot discard chips. Interactive card hands are not saved mid-hand; finish or cash out before reloading the browser.
 
 ## Rules check
 
