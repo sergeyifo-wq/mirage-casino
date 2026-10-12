@@ -19,6 +19,28 @@ export const PAYLINES: number[][] = [
   [2, 1, 0],
 ];
 
+export const PAYLINE_NAMES = ["Middle", "Top", "Bottom", "Down diagonal", "Up diagonal"];
+export const SPIN_DURATION = 2200;
+
+export type SlotSpin = {
+  id: string;
+  grid: SymbolId[][];
+  bet: number;
+  practice: boolean;
+  hosted: boolean;
+  endsAt: number;
+};
+
+export function isSymbolGrid(grid: unknown): grid is SymbolId[][] {
+  return Array.isArray(grid) && grid.length === 3 && grid.every((reel) =>
+    Array.isArray(reel) && reel.length === 3 && reel.every((id) => SYMBOLS.some((symbol) => symbol.id === id)),
+  );
+}
+
+export function linePayout(symbol: SymbolId, bet: number): number {
+  return Math.floor((bet * SYMBOLS.find((entry) => entry.id === symbol)!.pay) / PAY_DIVISOR);
+}
+
 const WEIGHT_TOTAL = SYMBOLS.reduce((sum, symbol) => sum + symbol.weight, 0);
 
 export function randomSymbol(rng: () => number): SymbolId {
@@ -45,7 +67,7 @@ export function scoreGrid(grid: SymbolId[][], bet: number): { total: number; lin
     const matched = symbols.every((entry) => entry === symbol || entry === "wild");
     if (!matched) return;
     const pay = SYMBOLS.find((entry) => entry.id === symbol)?.pay ?? 0;
-    const amount = Math.floor((bet * pay) / PAY_DIVISOR);
+    const amount = linePayout(symbol, bet);
     if (amount > 0) lines.push({ index, symbol, pay, amount });
   });
   return { total: lines.reduce((sum, line) => sum + line.amount, 0), lines };

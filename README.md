@@ -19,6 +19,7 @@ Your progress is saved in this browser under `midnight-mirage-v1`. The suite can
 
 - **Floor map** — blackjack, poker, roulette, slots, baccarat, the bar, and your suite. Let the hour pass from early evening to after hours. Who is seated changes.
 - **Tables** — real rules, bet controls, practice mode, and a short tutorial the first time you sit down.
+- **Mirage Reels** — illustrated symbols, staggered reel stops, five selectable payline previews, and a paytable that shows chip payouts at your chosen stake. One stake covers all five lines. Accepted spins are saved and settle once even if you leave or reload. After hours is practice only.
 - **People** — hosts and regulars have their own voices. Reply between hands, or sit at the bar for a longer talk. They remember the tone you use.
 - **Invitations** — chemistry, conversation, and time of night. A full rack does not open a door.
 - **Suite** — nightly allowance of 500 chips, table themes, off-duty portraits, and the relationship journal.

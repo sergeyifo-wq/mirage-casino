@@ -1,3 +1,5 @@
+import type { SlotSpin } from "./slots";
+
 export type CharacterId =
   | "reina"
   | "akari"
@@ -70,6 +72,8 @@ export type SaveState = {
   stats: SaveStats;
   music: boolean;
   sfx: boolean;
+  pendingSlotSpin?: SlotSpin | null;
+  lastSlotSpin?: SlotSpin | null;
 };
 
 export type ChoiceEffects = {
